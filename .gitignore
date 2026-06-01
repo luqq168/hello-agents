@@ -138,6 +138,11 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Docs PDF build artifacts
+node_modules/
+docs/.pdf-build/
+docs/**/*.pdf
+
 # mypy
 .mypy_cache/
 .dmypy.json

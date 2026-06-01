@@ -1,0 +1,61 @@
+name: Build chapter PDFs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "docs/chapter*/**"
+      - "docs/pdf-style.css"
+      - "docs/md-to-pdf.config.cjs"
+      - "docs/build-pdf.mjs"
+      - "docs/merge-pdfs.mjs"
+      - "scripts/download-doc-images.py"
+      - "scripts/merge-chapter-pdfs.py"
+      - "requirements-docs.txt"
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-docs.txt
+
+      - name: Download doc images
+        run: npm run docs:images
+
+      - name: Build chapter PDFs
+        run: npm run docs:pdf
+
+      - name: Merge Chinese and English books with bookmarks
+        run: npm run docs:pdf:merge
+
+      - name: Upload chapter PDF artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chapter-pdfs
+          path: docs/chapter*/*.pdf
+          if-no-files-found: error
+
+      - name: Upload merged book PDFs
+        uses: actions/upload-artifact@v4
+        with:
+          name: hello-agents-books
+          path: |
+            docs/Hello-Agents-全书-中文.pdf
+            docs/Hello-Agents-全书-英文.pdf
+          if-no-files-found: error

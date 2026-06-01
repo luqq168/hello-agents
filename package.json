@@ -1,0 +1,16 @@
+{
+  "name": "hello-agents",
+  "private": true,
+  "description": "Hello-Agents book repository",
+  "scripts": {
+    "docs:images": "python scripts/download-doc-images.py",
+    "docs:pdf": "node docs/build-pdf.mjs",
+    "docs:pdf:chapter2": "node docs/build-pdf.mjs chapter2",
+    "docs:pdf:merge": "python scripts/merge-chapter-pdfs.py",
+    "docs:pdf:all": "npm run docs:images && npm run docs:pdf",
+    "docs:pdf:full": "npm run docs:pdf:all && npm run docs:pdf:merge"
+  },
+  "devDependencies": {
+    "md-to-pdf": "^5.2.4"
+  }
+}
