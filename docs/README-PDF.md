@@ -37,7 +37,7 @@ node docs/build-pdf.mjs chapter2
 ## 输出说明
 
 - PDF 路径：`docs/chapterN/<章节名>.pdf`
-- 合并全书（中/英分册，左侧书签三级结构：**章** → `##` 节 → `###` 小节）：
+- 合并全书（中/英分册，左侧书签三级结构：**章** → 带序号小节（如 `9.2.3`、`16.4.1`）→ 子小节；每章末尾另含 **习题**、**参考文献**（英文为 Exercises / References，若该章 Markdown 有对应标题）；不含代码示例内的 `## 项目简介` 等无序号标题）：
   - `docs/Hello-Agents-全书-中文.pdf`
   - `docs/Hello-Agents-全书-英文.pdf`
 - 构建缓存：`docs/.pdf-build/`（staging 与图片 manifest，可删除后重建）
@@ -46,6 +46,7 @@ node docs/build-pdf.mjs chapter2
 ## 特性
 
 - 使用 [md-to-pdf](https://github.com/simonhaenisch/md-to-pdf)（Chromium 渲染），兼容文内 HTML（`<div>`、`<img>` 等）
+- 使用 [KaTeX](https://katex.org/)（`marked-katex-extension`，与 Docsify 站点一致）渲染 `$...$` / `$$...$$` 公式
 - 文首插入 **目录** 块，条目可点击跳转到对应标题
 - 远程图片先本地化到 `docs/images/`，PDF 中以站点根路径 `/images/...` 加载（避免 staging 目录导致图片 404）
 

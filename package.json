@@ -11,6 +11,8 @@
     "docs:pdf:full": "npm run docs:pdf:all && npm run docs:pdf:merge"
   },
   "devDependencies": {
+    "katex": "^0.17.0",
+    "marked-katex-extension": "^5.1.10",
     "md-to-pdf": "^5.2.4"
   }
 }

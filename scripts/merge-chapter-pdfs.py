@@ -12,6 +12,7 @@ from pathlib import Path
 
 try:
     from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import Fit
 except ImportError:
     print("Missing dependency: pip install pypdf", file=sys.stderr)
     raise SystemExit(1) from None
@@ -31,6 +32,12 @@ OUTPUTS = {
 }
 
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+)$")
+# Only section headings like "9.2.3 Title" or "16.4.1 Title" (not "📝 项目简介")
+NUMBERED_TITLE_RE = re.compile(r"^\d+(?:\.\d+)+\s+\S")
+NUMBERED_LINE_RE = re.compile(r"^\d+(?:\.\d+)+\s+")
+TRAILING_BOOKMARK_TITLES = frozenset(
+    {"习题", "参考文献", "Exercises", "References"}
+)
 SKIP_TITLES = frozenset({"目录", "Table of Contents"})
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -39,6 +46,15 @@ HTML_TAG_RE = re.compile(r"<[^>]+>")
 class Heading:
     level: int  # 2 = ##, 3 = ###
     title: str
+    section_id: str  # e.g. "9.2.3"
+
+
+@dataclass(frozen=True)
+class HeadingPosition:
+    """Bookmark target: page index (0-based) and optional vertical scroll (PDF /FitH)."""
+
+    page: int
+    fit: Fit
 
 
 def chapter_num(path: Path) -> int:
@@ -74,8 +90,29 @@ def plain_title(raw: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def parse_section_id(title: str) -> str | None:
+    title = title.strip()
+    m = re.match(r"^(\d+(?:\.\d+)+)", title)
+    if m:
+        return m.group(1)
+    if title in TRAILING_BOOKMARK_TITLES:
+        return title
+    return None
+
+
+def is_numbered_section_title(title: str) -> bool:
+    return bool(NUMBERED_TITLE_RE.match(title.strip()))
+
+
+def is_trailing_bookmark_title(title: str) -> bool:
+    return title.strip() in TRAILING_BOOKMARK_TITLES
+
+
+def should_bookmark_heading(title: str) -> bool:
+    return is_numbered_section_title(title) or is_trailing_bookmark_title(title)
+
+
 def normalize_text(text: str) -> str:
-    # Drop emoji / symbols that often differ between MD and PDF text extraction
     text = re.sub(
         r"[\U00010000-\U0010ffff"
         r"\u2600-\u27bf"
@@ -102,80 +139,168 @@ def extract_headings(md_path: Path) -> list[Heading]:
         title = plain_title(m.group(2))
         if not title or title in SKIP_TITLES:
             continue
-        headings.append(Heading(level=level, title=title))
+        if not should_bookmark_heading(title):
+            continue
+        section_id = parse_section_id(title)
+        if not section_id:
+            continue
+        headings.append(Heading(level=level, title=title, section_id=section_id))
     return headings
 
 
-def _is_toc_page(doc: fitz.Document, pno: int, headings: list[Heading]) -> bool:
-    """Heuristic: injected HTML TOC lists many section titles on one page."""
-    page_norm = normalize_text(doc[pno].get_text())
-    if "目录" in page_norm or "TableofContents" in page_norm.replace(" ", ""):
-        hits = sum(
-            1 for h in headings if normalize_text(h.title) in page_norm
-        )
-        if hits >= 3:
-            return True
+def _page_lines(doc: fitz.Document, pno: int) -> list[str]:
+    return [ln.strip() for ln in doc[pno].get_text().splitlines() if ln.strip()]
+
+
+def _is_toc_page(doc: fitz.Document, pno: int) -> bool:
+    """
+    Detect in-document TOC pages (not body text containing substring '目录').
+    """
+    lines = _page_lines(doc, pno)
+    if not lines:
+        return False
+
+    # Explicit "目录" / "Table of Contents" title near top
+    for ln in lines[:6]:
+        if ln in SKIP_TITLES or ln.lower() == "table of contents":
+            numbered = sum(1 for x in lines if NUMBERED_LINE_RE.match(x))
+            return numbered >= 5
+
+    # TOC continuation: mostly short lines that look like section entries
+    if pno <= 4:
+        numbered = [ln for ln in lines if NUMBERED_LINE_RE.match(ln)]
+        if len(numbered) >= 8 and len(numbered) >= len(lines) * 0.45:
+            long_body = sum(1 for ln in lines if len(ln) > 60)
+            return long_body <= 2
+
+    # Page lists many section titles (injected PDF TOC) without "目录" header
+    if pno <= 2:
+        hits = sum(1 for ln in lines if NUMBERED_LINE_RE.match(ln))
+        if hits >= 6 and hits / max(len(lines), 1) >= 0.35:
+            long_body = sum(1 for ln in lines if len(ln) > 80)
+            if long_body <= 1:
+                return True
+
     return False
 
 
-def _page_has_heading(doc: fitz.Document, pno: int, needle: str) -> bool:
-    if not needle:
+def _toc_pages(doc: fitz.Document) -> set[int]:
+    return {pno for pno in range(len(doc)) if _is_toc_page(doc, pno)}
+
+
+def _rect_to_fit(page: fitz.Page, rect: fitz.Rect) -> Fit:
+    pdf_top = float(page.rect.height - rect.y0)
+    return Fit.fit_horizontally(top=pdf_top)
+
+
+def _section_id_at_line_start(line_norm: str, id_norm: str) -> bool:
+    """True if line starts with section id but not a deeper subsection (1.4 vs 1.4.1)."""
+    if not line_norm.startswith(id_norm):
         return False
-    page_norm = normalize_text(doc[pno].get_text())
-    return needle in page_norm
+    rest = line_norm[len(id_norm) :]
+    if not rest:
+        return True
+    return not rest.startswith(".")
+    # After normalize, "1.4.1" -> rest after "1.4" is ".1..."
 
 
-def find_heading_pages(pdf_path: Path, headings: list[Heading]) -> list[int]:
+def _line_matches_heading(line_text: str, heading: Heading) -> bool:
+    line_norm = normalize_text(line_text)
+    title_norm = normalize_text(heading.title)
+
+    if line_norm == title_norm:
+        return True
+
+    if heading.section_id in TRAILING_BOOKMARK_TITLES:
+        return line_norm == normalize_text(heading.section_id)
+
+    id_norm = normalize_text(heading.section_id)
+    if not _section_id_at_line_start(line_norm, id_norm):
+        return False
+    return line_norm.startswith(title_norm)
+
+
+def _pick_heading_rect(page: fitz.Page, heading: Heading) -> fitz.Rect | None:
+    """Pick topmost heading line on a page (ignore TOC duplicates and inline mentions)."""
+    best: fitz.Rect | None = None
+    best_y = float("inf")
+
+    data = page.get_text("dict")
+    for block in data.get("blocks", []):
+        for line in block.get("lines", []):
+            line_text = "".join(span.get("text", "") for span in line.get("spans", []))
+            if not _line_matches_heading(line_text, heading):
+                continue
+            x0, y0, x1, y1 = line["bbox"]
+            if y0 < best_y:
+                best_y = y0
+                best = fitz.Rect(x0, y0, x1, y1)
+
+    if best is not None:
+        return best
+
+    # Fallback: full-title search only when it maps to a single heading line
+    rects = page.search_for(heading.title)
+    if len(rects) == 1:
+        return rects[0]
+    return None
+
+
+def find_heading_positions(
+    pdf_path: Path, headings: list[Heading]
+) -> list[HeadingPosition]:
     if not headings:
         return []
 
     doc = fitz.open(str(pdf_path))
     page_count = len(doc)
-    pages: list[int] = []
+    positions: list[HeadingPosition] = []
     search_from = 0
-    last_page = 0
+    last = HeadingPosition(page=0, fit=Fit.fit_horizontally(top=None))
 
-    toc_pages = {pno for pno in range(page_count) if _is_toc_page(doc, pno, headings)}
+    toc_pages = _toc_pages(doc)
 
     try:
         for heading in headings:
-            needle = normalize_text(heading.title)
-            found: int | None = None
+            found_page: int | None = None
+            found_rect: fitz.Rect | None = None
 
-            if needle:
-                for pno in range(search_from, page_count):
-                    if pno in toc_pages:
-                        continue
-                    if _page_has_heading(doc, pno, needle):
-                        found = pno
-                        break
+            for pno in range(search_from, page_count):
+                if pno in toc_pages:
+                    continue
+                page = doc[pno]
+                rect = _pick_heading_rect(page, heading)
+                if rect is not None:
+                    found_page = pno
+                    found_rect = rect
+                    break
 
-            if found is None:
-                prefix_m = re.match(r"^[\d.]+\s*", heading.title)
-                if prefix_m:
-                    prefix = normalize_text(prefix_m.group(0))
-                    if prefix:
-                        for pno in range(search_from, page_count):
-                            if pno in toc_pages:
-                                continue
-                            if prefix in normalize_text(doc[pno].get_text()):
-                                found = pno
-                                break
-
-            if found is None:
-                found = last_page
+            if found_page is None:
+                found_page = last.page
+                page = doc[found_page]
+                found_rect = _pick_heading_rect(page, heading) or fitz.Rect(
+                    72, 72, 200, 90
+                )
                 warnings.warn(
-                    f"Heading not found in PDF, using fallback page: "
-                    f"{pdf_path.name!r} -> {heading.title!r} (page {found + 1})"
+                    f"Heading position fallback: {pdf_path.name!r} -> "
+                    f"{heading.title!r} (page {found_page + 1})"
                 )
 
-            pages.append(found)
-            last_page = found
-            search_from = found  # ### may share the same page as ##
+            page = doc[found_page]
+            fit = (
+                _rect_to_fit(page, found_rect)
+                if found_rect is not None
+                else Fit.fit_horizontally(top=None)
+            )
+
+            pos = HeadingPosition(page=found_page, fit=fit)
+            positions.append(pos)
+            last = pos
+            search_from = found_page
     finally:
         doc.close()
 
-    return pages
+    return positions
 
 
 def count_outline_items(outline) -> int:
@@ -198,23 +323,28 @@ def merge_with_nested_bookmarks(pdf_paths: list[Path], output_path: Path) -> tup
         chapter_title = pdf_path.stem
         md_path = md_path_for_pdf(pdf_path)
         headings = extract_headings(md_path)
-        heading_pages = find_heading_pages(pdf_path, headings)
+        heading_positions = find_heading_positions(pdf_path, headings)
 
         reader = PdfReader(str(pdf_path))
         chapter_start = len(writer.pages)
         writer.append(reader)
         n_pages = len(reader.pages)
 
-        chapter_ref = writer.add_outline_item(chapter_title, chapter_start)
+        chapter_ref = writer.add_outline_item(
+            chapter_title, chapter_start, fit=Fit.fit_horizontally(top=None)
+        )
         total_bookmarks += 1
 
         parent_by_level: dict[int, object] = {1: chapter_ref}
 
-        for heading, local_page in zip(headings, heading_pages, strict=False):
-            global_page = chapter_start + local_page
+        for heading, pos in zip(headings, heading_positions, strict=False):
+            global_page = chapter_start + pos.page
             parent = parent_by_level.get(heading.level - 1, chapter_ref)
             ref = writer.add_outline_item(
-                heading.title, global_page, parent=parent
+                heading.title,
+                global_page,
+                parent=parent,
+                fit=pos.fit,
             )
             parent_by_level[heading.level] = ref
             for deeper in list(parent_by_level):
@@ -225,7 +355,7 @@ def merge_with_nested_bookmarks(pdf_paths: list[Path], output_path: Path) -> tup
         sub_count = len(headings)
         print(
             f"  + {pdf_path.relative_to(DOCS_DIR)} ({n_pages} pages) "
-            f"-> [{chapter_title}] + {sub_count} section(s)"
+            f"-> [{chapter_title}] + {sub_count} numbered section(s)"
         )
 
     _write_pdf(writer, output_path)
@@ -244,7 +374,11 @@ def _write_pdf(writer: PdfWriter, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copy2(tmp_path, output_path)
-        print(f"  Saved {output_path.relative_to(REPO_ROOT)}")
+        try:
+            saved = output_path.relative_to(REPO_ROOT)
+        except ValueError:
+            saved = output_path
+        print(f"  Saved {saved}")
     except PermissionError:
         fallback = build_dir / output_path.name
         shutil.copy2(tmp_path, fallback)

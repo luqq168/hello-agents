@@ -44,7 +44,9 @@ function findChapterMds() {
     }
   }
   return onlyFilter
-    ? files.filter((f) => f.includes(onlyFilter.replace(/\\/g, "/")))
+    ? files.filter((f) =>
+        f.replace(/\\/g, "/").includes(onlyFilter.replace(/\\/g, "/"))
+      )
     : files;
 }
 
@@ -136,7 +138,7 @@ function prepareMarkdown(mdPath, manifest) {
   const lines = localized.split(/\r?\n/);
   let insertAt = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (/^#\s+/.test(lines[i])) {
+    if (/^\s*#\s+/.test(lines[i])) {
       insertAt = i + 1;
       break;
     }

@@ -6,14 +6,32 @@ html {
   font-size: 11pt;
 }
 
-body {
+body,
+.markdown-body {
   font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC",
-    sans-serif;
+    sans-serif !important;
   line-height: 1.65;
   color: #24292f;
   max-width: 820px;
   margin: 0 auto;
   padding: 0 8px;
+}
+
+.markdown-body p,
+.markdown-body li,
+.markdown-body td,
+.markdown-body th,
+.markdown-body blockquote,
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6,
+.markdown-body strong,
+.markdown-body em,
+.markdown-body span:not(pre span):not(code span) {
+  font-family: inherit !important;
 }
 
 .markdown-body h1,
@@ -71,11 +89,18 @@ body {
 }
 
 .markdown-body code {
-  font-family: Consolas, "Courier New", monospace;
+  font-family: Consolas, "Microsoft YaHei", "Segoe UI", "Courier New", monospace !important;
   font-size: 0.9em;
   background: #f6f8fa;
   padding: 0.15em 0.35em;
   border-radius: 4px;
+}
+
+.markdown-body pre,
+.markdown-body pre code,
+.markdown-body pre code.hljs,
+.markdown-body .hljs {
+  font-family: Consolas, "Microsoft YaHei", "Segoe UI", "Courier New", monospace !important;
 }
 
 .markdown-body pre code {
@@ -114,6 +139,22 @@ body {
 
 .markdown-body a:hover {
   text-decoration: underline;
+}
+
+/* KaTeX math (aligned with Docsify katex in docs/index.html) */
+.markdown-body .katex {
+  font-size: 1.05em;
+}
+
+.markdown-body .katex-display {
+  margin: 0.8em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  page-break-inside: avoid;
+}
+
+.markdown-body .katex-display > .katex {
+  white-space: normal;
 }
 
 /* In-document table of contents */
