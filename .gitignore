@@ -172,3 +172,5 @@ test_*.py
 !test_tools.py
 .workbuddy/
 memory/
+
+.vscode
