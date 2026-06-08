@@ -190,3 +190,20 @@ body,
 .pdf-toc li.toc-h4 {
   padding-left: 2.5em;
 }
+
+/* ===== 代码块截断修复 ===== */
+pre {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  overflow-x: hidden;
+  page-break-inside: auto !important;   /* 允许在代码块内部分页 */
+  break-inside: auto !important;        /* 现代浏览器写法（Puppeteer 用这个）*/
+}
+
+pre code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+}
