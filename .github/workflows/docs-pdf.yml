@@ -6,6 +6,8 @@ on:
     branches: [main, master]
     paths:
       - "docs/chapter*/**"
+      - "docs/前言.md"
+      - "docs/Preface.md"
       - "docs/pdf-style.css"
       - "docs/md-to-pdf.config.cjs"
       - "docs/build-pdf.mjs"
@@ -48,7 +50,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: chapter-pdfs
-          path: docs/chapter*/*.pdf
+          path: |
+            docs/前言.pdf
+            docs/Preface.pdf
+            docs/chapter*/*.pdf
           if-no-files-found: error
 
       - name: Upload merged book PDFs

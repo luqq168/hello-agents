@@ -1,5 +1,5 @@
 /**
- * Build PDFs for docs/chapterNN/*.md using md-to-pdf.
+ * Build PDFs for docs/前言.md, docs/Preface.md, and docs/chapterNN/*.md using md-to-pdf.
  * - Localizes remote images via manifest from scripts/download-doc-images.py
  * - Injects clickable in-document TOC
  * - Outputs PDF next to each source .md
@@ -23,6 +23,11 @@ const args = process.argv.slice(2);
 const onlyFilter = args.find((a) => !a.startsWith("--"));
 const dryRun = args.includes("--dry-run");
 
+const PREFACE_MDS = [
+  path.join(DOCS_DIR, "前言.md"),
+  path.join(DOCS_DIR, "Preface.md"),
+];
+
 function findChapterMds() {
   const chapters = fs
     .readdirSync(DOCS_DIR, { withFileTypes: true })
@@ -43,6 +48,12 @@ function findChapterMds() {
       }
     }
   }
+  return files;
+}
+
+function findAllMds() {
+  const prefaces = PREFACE_MDS.filter((p) => fs.existsSync(p));
+  const files = [...prefaces, ...findChapterMds()];
   return onlyFilter
     ? files.filter((f) =>
         f.replace(/\\/g, "/").includes(onlyFilter.replace(/\\/g, "/"))
@@ -75,14 +86,31 @@ function slugify(text) {
 function extractHeadings(markdown) {
   const headings = [];
   const lines = markdown.split(/\r?\n/);
+
+  let inCodeBlock = false;
+
   for (const line of lines) {
+    if (/^(`{3,}|~{3,})/.test(line.trim())) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock) continue;
+
     const m = /^(#{1,4})\s+(.+)$/.exec(line.trim());
     if (!m) continue;
+
     const level = m[1].length;
     const title = m[2].replace(/\s+#+\s*$/, "").trim();
+
     if (level === 1) continue;
+
+    const isNumbered = /^\d+(\.\d+)*\.?\s/.test(title);
+    if (!isNumbered) continue;
+
     headings.push({ level, title, id: slugify(title) });
   }
+
   return headings;
 }
 
@@ -175,6 +203,8 @@ async function buildOne(mdPath, manifest) {
       dest: pdfPath,
       basedir: DOCS_DIR,
       ...CONFIG,
+      // as_html: true,
+      // dest: pdfPath + ".html",
     }
   );
 
@@ -186,7 +216,7 @@ async function buildOne(mdPath, manifest) {
 
 async function main() {
   const manifest = loadManifest();
-  const files = findChapterMds();
+  const files = findAllMds();
   if (files.length === 0) {
     console.error("No markdown files matched.");
     process.exit(1);

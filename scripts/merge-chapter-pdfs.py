@@ -31,6 +31,11 @@ OUTPUTS = {
     "en": DOCS_DIR / "Hello-Agents-全书-英文.pdf",
 }
 
+PREFACE_PDFS = {
+    "zh": DOCS_DIR / "前言.pdf",
+    "en": DOCS_DIR / "Preface.pdf",
+}
+
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+)$")
 # Only section headings like "9.2.3 Title" or "16.4.1 Title" (not "📝 项目简介")
 NUMBERED_TITLE_RE = re.compile(r"^\d+(?:\.\d+)+\s+\S")
@@ -78,6 +83,15 @@ def find_chapter_pdfs(lang: str) -> list[Path]:
             elif lang == "en" and not zh:
                 pdfs.append(pdf)
     return sorted(pdfs, key=chapter_num)
+
+
+def find_book_pdfs(lang: str) -> list[Path]:
+    pdfs: list[Path] = []
+    preface = PREFACE_PDFS.get(lang)
+    if preface and preface.is_file():
+        pdfs.append(preface)
+    pdfs.extend(find_chapter_pdfs(lang))
+    return pdfs
 
 
 def md_path_for_pdf(pdf_path: Path) -> Path:
@@ -396,9 +410,12 @@ def main() -> int:
     failed = 0
     for lang, out_path in OUTPUTS.items():
         label = "中文" if lang == "zh" else "English"
-        pdfs = find_chapter_pdfs(lang)
+        pdfs = find_book_pdfs(lang)
         if not pdfs:
-            print(f"No {label} PDFs found under docs/chapter*/", file=sys.stderr)
+            print(
+                f"No {label} PDFs found (docs/前言.pdf or Preface.pdf, or docs/chapter*/)",
+                file=sys.stderr,
+            )
             failed += 1
             continue
 

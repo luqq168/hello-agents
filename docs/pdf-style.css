@@ -17,6 +17,24 @@ body,
   padding: 0 8px;
 }
 
+.markdown-body p {
+  text-indent: 2em;
+}
+
+/* 以下场景不缩进 */
+.markdown-body blockquote p,
+.markdown-body li p,
+.markdown-body .pdf-toc p {
+  text-indent: 0;
+}
+
+/* 防止长URL撑出页面宽度 */
+.markdown-body p,
+.markdown-body li {
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
+
 .markdown-body p,
 .markdown-body li,
 .markdown-body td,
@@ -164,7 +182,9 @@ body,
   border-radius: 8px;
   padding: 1em 1.25em;
   margin: 1.5em 0 2em;
-  page-break-after: always;
+  page-break-after: auto;
+  break-after: auto;
+  margin-bottom: 24px;
 }
 
 .pdf-toc h2 {
@@ -197,8 +217,8 @@ pre {
   word-wrap: break-word !important;
   word-break: break-all !important;
   overflow-x: hidden;
-  page-break-inside: auto !important;   /* 允许在代码块内部分页 */
-  break-inside: auto !important;        /* 现代浏览器写法（Puppeteer 用这个）*/
+  page-break-inside: auto !important;
+  break-inside: auto !important;
 }
 
 pre code {

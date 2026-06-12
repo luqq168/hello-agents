@@ -1,6 +1,6 @@
 # 章节 Markdown 转 PDF
 
-将 `docs/chapter1` … `docs/chapter16` 下的 Markdown 转为 PDF（版式接近 Markdown 预览，含文内可点击目录）。
+将 `docs/前言.md`、`docs/Preface.md` 以及 `docs/chapter1` … `docs/chapter16` 下的 Markdown 转为 PDF（版式接近 Markdown 预览，含文内可点击目录）。
 
 ## 环境要求
 
@@ -36,8 +36,8 @@ node docs/build-pdf.mjs chapter2
 
 ## 输出说明
 
-- PDF 路径：`docs/chapterN/<章节名>.pdf`
-- 合并全书（中/英分册，左侧书签三级结构：**章** → 带序号小节（如 `9.2.3`、`16.4.1`）→ 子小节；每章末尾另含 **习题**、**参考文献**（英文为 Exercises / References，若该章 Markdown 有对应标题）；不含代码示例内的 `## 项目简介` 等无序号标题）：
+- PDF 路径：`docs/前言.pdf`、`docs/Preface.pdf`、`docs/chapterN/<章节名>.pdf`
+- 合并全书（中/英分册，左侧书签：**前言** / **Preface** → **章** → 带序号小节（如 `9.2.3`、`16.4.1`）→ 子小节；每章末尾另含 **习题**、**参考文献**（英文为 Exercises / References，若该章 Markdown 有对应标题）；不含代码示例内的 `## 项目简介` 等无序号标题）：
   - `docs/Hello-Agents-全书-中文.pdf`
   - `docs/Hello-Agents-全书-英文.pdf`
 - 构建缓存：`docs/.pdf-build/`（staging 与图片 manifest，可删除后重建）

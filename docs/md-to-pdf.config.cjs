@@ -24,6 +24,7 @@ module.exports = {
     format: "A4",
     printBackground: true,
     displayHeaderFooter: false,
+    // preferCSSPageSize: true,
     margin: {
       top: "20mm",
       bottom: "20mm",
@@ -32,6 +33,11 @@ module.exports = {
     },
   },
   launch_options: {
-    args: ["--font-render-hinting=medium", "--lang=zh-CN"],
+    args: [
+      "--font-render-hinting=medium",
+      "--lang=zh-CN",
+      // "--disable-features=PrintPreviewScaling",
+      // "--run-all-compositor-stages-before-draw",
+    ],
   },
 };
